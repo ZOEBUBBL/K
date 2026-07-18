@@ -1,0 +1,8 @@
+# the paid reel must never be committed
+poses-full.mp4
+art/portrait-clean.png
+
+node_modules/
+.wrangler/
+.DS_Store
+*.log
