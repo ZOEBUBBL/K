@@ -181,7 +181,30 @@ const CONFIG = {
   // TEST MODE — use a still until the reel is shot.
   // 'video' = pose reel, 'image' = single still filling the back wall.
   // Uses the blurred still, which is committed — so the test works hosted too.
-  media: { type:'image', image:'./art/portrait-blurred.png' },
+  // key:'green' keys out a flat green background so a cut-out reads as a real
+  // figure standing in the room instead of a flat rectangle. false = show the
+  // still as-is (current portrait-blurred has no green screen, so leave false
+  // until you drop in a green-background cut-out of Zoe).
+  media: { type:'image', image:'./art/zoe-cutout.png', key:false },
+
+  // ── Cut-out prop layers → the parallax depth ─────────────────────────
+  // Each prop is its OWN plane at its OWN depth, so they slide past each other
+  // as the phone moves. That parallax is what turns five flat walls into a
+  // space Zoe lives in. Generate each object on a flat chroma-green background
+  // (prompts in docs/grok-prompts.md) and set key:'green'.
+  //   depth : 0 = flat on the back wall, 1 = right up at the keyhole
+  //   x, y  : offset from room centre in room-width units (+x = right, +y = up)
+  //   scale : height as a fraction of the room (1.0 = floor-to-ceiling)
+  // A file that doesn't exist yet just stays invisible — add art gradually.
+  // These PNGs are already keyed to transparency (background removed), so
+  // key:false — the engine uses each file's own alpha. Regenerate on green and
+  // re-key if you edit them. Couch sits right, at mid-depth, as requested.
+  layers: [
+    { src:'./art/couch.png',      x: 0.17, y:-0.15, depth:0.40, scale:0.34, key:false },
+    { src:'./art/candelabra.png', x: 0.27, y:-0.05, depth:0.30, scale:0.40, key:false },
+    { src:'./art/frames.png',     x:-0.24, y: 0.12, depth:0.06, scale:0.34, key:false },
+    { src:'./art/bookshelf.png',  x:-0.27, y:-0.04, depth:0.14, scale:0.60, key:false }
+  ],
 
   // The printed aperture, measured off card-front.png, in card-width units.
   // openTo is how far the portal blooms past the print once tracking locks.
@@ -349,7 +372,8 @@ const poseMat = insidePortal(new THREE.ShaderMaterial({
     similarity: {value: CONFIG.key.similarity},
     smoothness: {value: CONFIG.key.smoothness},
     spill:      {value: CONFIG.key.spill},
-    keyOn:      {value: (!IMAGE_MODE && CONFIG.key.enabled) ? 1.0 : 0.0},
+    keyOn:      {value: (IMAGE_MODE ? (CONFIG.media.key === 'green')
+                                    : CONFIG.key.enabled) ? 1.0 : 0.0},
     fade:       {value: 1.0}
   },
   vertexShader: `
@@ -375,7 +399,7 @@ const poseMat = insidePortal(new THREE.ShaderMaterial({
     void main(){
       vec4  tex   = texture2D(map, vUv);
       vec3  rgb   = tex.rgb;
-      float alpha = 1.0;
+      float alpha = tex.a;          // respect a transparent cut-out's own alpha
 
       if (keyOn > 0.5){
         float dist = distance(toUV(rgb), toUV(keyColor));
@@ -405,8 +429,74 @@ const poseMesh = IMAGE_MODE
   : new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.45), poseMat);
 poseMesh.position.set(0, CY + (IMAGE_MODE ? 0 : 0.005),
                       IMAGE_MODE ? zoeZ : -DEPTH * 0.62);
-poseMesh.renderOrder = 3;
+// Draw order rises with how far forward a thing sits, so nearer things paint
+// over farther ones (everything here is depthWrite:false). Zoe uses her own
+// forward amount; props below use theirs.
+poseMesh.renderOrder = 3 + (IMAGE_MODE ? ZOE_FORWARD : 0.62);
 room.add(poseMesh);
+
+// ── Cut-out prop layers → parallax depth ────────────────────────────────
+// Builds one keyhole-clipped plane per CONFIG.layers entry. key:'green'
+// chroma-keys a green background; otherwise a transparent PNG's own alpha is
+// used. Missing files stay invisible so art can land one piece at a time.
+function cutoutMat(keyMode){
+  if (keyMode !== 'green'){
+    return insidePortal(new THREE.MeshBasicMaterial({
+      transparent:true, alphaTest:0.03, depthWrite:false, toneMapped:false
+    }));
+  }
+  return insidePortal(new THREE.ShaderMaterial({
+    transparent:true, depthWrite:false,
+    uniforms:{
+      map:{value:null},
+      keyColor:{value:new THREE.Color(CONFIG.key.color)},
+      similarity:{value:CONFIG.key.similarity},
+      smoothness:{value:CONFIG.key.smoothness},
+      spill:{value:CONFIG.key.spill}
+    },
+    vertexShader:`
+      varying vec2 vUv;
+      void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+    fragmentShader:`
+      uniform sampler2D map; uniform vec3 keyColor;
+      uniform float similarity, smoothness, spill; varying vec2 vUv;
+      vec2 toUV(vec3 c){ return vec2(dot(c,vec3(-0.169,-0.331,0.500))+0.5,
+                                     dot(c,vec3( 0.500,-0.419,-0.081))+0.5); }
+      vec3 toLinear(vec3 c){ return mix(c/12.92, pow((c+0.055)/1.055, vec3(2.4)), step(vec3(0.04045), c)); }
+      void main(){
+        vec4  tx    = texture2D(map, vUv);
+        float dist  = distance(toUV(tx.rgb), toUV(keyColor));
+        float alpha = smoothstep(similarity, similarity + smoothness, dist);
+        float luma  = dot(tx.rgb, vec3(0.2126, 0.7152, 0.0722));
+        vec3  rgb   = mix(vec3(luma), tx.rgb, clamp(alpha + spill, 0.0, 1.0));
+        alpha *= tx.a;
+        if (alpha < 0.03) discard;
+        gl_FragColor = vec4(toLinear(rgb), alpha);
+      }`
+  }));
+}
+(CONFIG.layers || []).forEach(L=>{
+  const depth = L.depth ?? 0.3;
+  const h     = ROOM_H * (L.scale ?? 0.5);
+  const mat   = cutoutMat(L.key);
+  const mesh  = new THREE.Mesh(new THREE.PlaneGeometry(h, h), mat);
+  mesh.position.set(L.x ?? 0, CY + (L.y ?? 0), -DEPTH * (0.99 - depth * 0.85));
+  mesh.renderOrder = 3 + Math.min(depth, 0.9);
+  mesh.visible = false;                 // hidden until its texture loads
+  room.add(mesh);
+  loader.load(L.src, t=>{
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.minFilter  = THREE.LinearFilter;
+    t.generateMipmaps = false;
+    const ar = (t.image && t.image.width && t.image.height)
+      ? t.image.width / t.image.height : 1;
+    mesh.geometry.dispose();
+    mesh.geometry = new THREE.PlaneGeometry(h * ar, h);   // keep true proportions
+    if (mat.uniforms) mat.uniforms.map.value = t; else mat.map = t;
+    mat.needsUpdate = true;
+    mesh.visible = true;
+  }, undefined, ()=>{ /* file not there yet — leave it hidden */ });
+});
 
 const halo = new THREE.Mesh(
   new THREE.CircleGeometry(0.24, 48),

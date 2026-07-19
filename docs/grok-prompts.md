@@ -179,3 +179,68 @@ Grok will wander. When panel five doesn't match panel three:
 Send me the room panels and I'll wire them into `index.html` as wall textures —
 right now those surfaces are flat colour placeholders, and swapping them for painted
 art is what turns the portal from a neat trick into somewhere that feels real.
+
+---
+
+## 8 — Cut-out layers  ·  the parallax depth
+
+The five wall panels above make a *box*. What makes it read as a *space* is a handful
+of objects that live **in front of** the back wall at different depths, so they slide
+past each other as the phone moves. `index.html` now has a `layers` list in `CONFIG`
+that drops each of these in at its own depth. The engine chroma-keys them, so:
+
+**Every cut-out below is generated the same way — one object, floating on a flat
+chroma-green field.**
+
+```
+CUTOUT RULES  (append after STYLE)
+Single subject, centred, full object visible with even margin on all sides — nothing
+touching or running off any edge. Background is a completely flat, uniform, solid
+chroma-green (#00B140) with NO gradient, NO shadow cast onto it, NO green reflection
+or rim on the subject. The subject is evenly lit and fully opaque. Nothing green
+anywhere on the subject itself. No ground plane, no floor, no other objects.
+```
+
+Why green and not "transparent": Grok won't give you a clean alpha channel, but a flat
+green it will. The engine keys `#00B140` — the same green as the video chroma — so a
+green-background PNG becomes a clean cut-out. Keep any green *off the subject* (no
+green cushions on the couch, no green in Zoe's clothes) or the key eats it.
+
+Filenames must match `CONFIG.layers`: `couch.png`, `candelabra.png`, `frames.png`,
+`bookshelf.png`, and Zoe as `zoe-cutout.png` (then set `media.image` to it and
+`media.key:'green'`).
+
+### 8a — Zoe cut-out  ·  `zoe-cutout.png`  ·  3:4 portrait
+> A stylized illustrated portrait of a young woman, full body, standing, relaxed
+> confident stance, facing the viewer. Dark clothing with deep amethyst and velvet
+> crimson accents, layered and a bit alternative. Rim-lit from behind in pale arcane
+> cyan with warm candlelight on one side of her face. Feet fully visible, whole figure
+> inside the frame. CUTOUT RULES. STYLE
+
+### 8b — Red couch  ·  `couch.png`  ·  square-ish  (sits right side, mid-depth)
+> An ornate velvet crimson chesterfield couch, three-quarter angled view as if seen
+> from the room's left looking toward the right wall, deeply buttoned and tufted, dark
+> carved wood legs and rolled arms, a few mismatched cushions in deep amethyst and
+> bruised plum (no green cushions). The whole couch visible including all four legs.
+> CUTOUT RULES. STYLE
+
+### 8c — Candelabra + side table  ·  `candelabra.png`  ·  tall
+> A tarnished antique gold candelabra of melted candles with small pale arcane cyan
+> flames, standing on a low dark wood side table with a stack of spellbooks and a
+> chipped mug. Whole object from tabletop legs to candle flames inside the frame.
+> CUTOUT RULES. STYLE
+
+### 8d — Frame cluster  ·  `frames.png`  ·  square  (left side, near back)
+> A cluster of tarnished antique gold picture frames of different sizes hung together,
+> a couple slightly crooked, holding faded polaroids, pinned tarot cards and a small
+> mirror. Just the frames as one group, nothing behind them. CUTOUT RULES. STYLE
+
+### 8e — Bookshelf  ·  `bookshelf.png`  ·  tall  (left side)
+> A tall dark wood bookshelf crammed with spellbooks, crystals, small skulls, trailing
+> plants and stacked art supplies, warm candle glow and pale arcane cyan catching the
+> edges. Whole shelf inside the frame. CUTOUT RULES. STYLE
+
+**Placement** lives in `CONFIG.layers` — `x` (left/right), `y` (up/down), `depth`
+(0 = back wall, 1 = at the keyhole), `scale`. The couch is already set to the right
+side at mid-depth. Tune the numbers on your phone; a file that isn't there yet just
+stays invisible, so add them one at a time.
