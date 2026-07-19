@@ -325,7 +325,14 @@ wall(DEPTH, ROOM_H, [-ROOM_W/2, CY, -DEPTH/2], [0, Math.PI/2, 0],
      panel(CONFIG.art.side, G.side, false));
 wall(DEPTH, ROOM_H, [ ROOM_W/2, CY, -DEPTH/2], [0,-Math.PI/2, 0],
      panel(CONFIG.art.side, G.side, true));
-wall(ROOM_W, DEPTH, [0, CY-ROOM_H/2, -DEPTH/2], [-Math.PI/2,0,0],
+// Floor: extend it forward (toward the viewer, past the portal plane) so its
+// front edge drops down into the keyhole's bottom stem. A flat floor seen at a
+// grazing angle projects its front edge UP into the aperture, leaving the stem
+// empty; the extra length fills it. It's stencil-clipped to the keyhole, so the
+// overhang only ever shows inside the hole. Bump FLOOR_FRONT if a gap remains.
+const FLOOR_FRONT = 0.34;
+const floorLen    = DEPTH + FLOOR_FRONT;
+wall(ROOM_W, floorLen, [0, CY-ROOM_H/2, (-DEPTH + FLOOR_FRONT)/2], [-Math.PI/2,0,0],
      panel(CONFIG.art.floor, G.floor, false));
 wall(ROOM_W, DEPTH, [0, CY+ROOM_H/2, -DEPTH/2], [ Math.PI/2,0,0],
      panel(CONFIG.art.ceiling, G.ceiling, false));
