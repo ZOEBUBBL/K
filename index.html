@@ -323,7 +323,12 @@ if (IMAGE_MODE){
     t.minFilter  = THREE.LinearFilter;
     t.generateMipmaps = false;
   });
-  backWall.visible = false;
+  // Keep the painted back wall as a solid backdrop. The Zoe still is narrower
+  // than the room (0.415 vs 0.62 wide), so hiding the wall left see-through
+  // strips on either side and in the back corners of the floor. Showing the
+  // wall closes the box, and gives Zoe something to stand in front of once she
+  // moves off the back wall.
+  backWall.visible = true;
 }else{
   video.crossOrigin = 'anonymous';
   video.loop = true;               // free clip loops natively
@@ -386,11 +391,20 @@ const poseMat = insidePortal(new THREE.ShaderMaterial({
     }`
 }));
 
+// ── Zoe placement (image mode) ──────────────────────────────────────────
+// ZOE_FORWARD: how far she steps off the back wall toward you.
+//   0.0 = flat against the back wall (old behaviour), 1.0 = up at the portal.
+// ZOE_SIZE: her scale. 1.0 = full room height; drop it if she looms too large
+//   once she's closer to the camera.
+const ZOE_FORWARD = 0.45;
+const ZOE_SIZE    = 0.90;
+const zoeZ = -DEPTH * (0.99 - ZOE_FORWARD * 0.85);   // 0.99 back → 0.14 at portal
+
 const poseMesh = IMAGE_MODE
-  ? new THREE.Mesh(new THREE.PlaneGeometry(ROOM_H * 0.67, ROOM_H), poseMat)
+  ? new THREE.Mesh(new THREE.PlaneGeometry(ROOM_H * 0.67 * ZOE_SIZE, ROOM_H * ZOE_SIZE), poseMat)
   : new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.45), poseMat);
 poseMesh.position.set(0, CY + (IMAGE_MODE ? 0 : 0.005),
-                      IMAGE_MODE ? -DEPTH * 0.99 : -DEPTH * 0.62);
+                      IMAGE_MODE ? zoeZ : -DEPTH * 0.62);
 poseMesh.renderOrder = 3;
 room.add(poseMesh);
 
