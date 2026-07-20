@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Through the Keyhole</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#07080D; --obsidian:#12141F; --keylight:#9FD8FF;
+    --gilt:#C9A227; --ember:#E5533D; --bone:#E8E4DA;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--void);color:var(--bone);
+    font-family:'Jost',system-ui,sans-serif;font-weight:300;overscroll-behavior:none}
+  #stage{position:fixed;inset:0}
+  #stage canvas{width:100%!important;height:100%!important}
+  #poseVideo{position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;top:-10px;left:-10px}
+
+  .hud{position:fixed;inset:0;pointer-events:none;z-index:10;
+    display:flex;flex-direction:column;justify-content:space-between;
+    padding:max(20px,env(safe-area-inset-top)) 18px max(18px,env(safe-area-inset-bottom))}
+  .hud > *{pointer-events:auto}
+  .eyebrow{font-family:'Cinzel',serif;font-weight:500;font-size:11px;letter-spacing:.34em;
+    text-transform:uppercase;color:var(--gilt);opacity:.85;text-align:center}
+
+  #scan{position:fixed;inset:0;z-index:9;display:grid;place-content:center;gap:18px;
+    text-align:center;padding:32px;
+    background:radial-gradient(120% 80% at 50% 45%,rgba(7,8,13,.35),rgba(7,8,13,.88));
+    transition:opacity .5s ease}
+  #scan.gone{opacity:0;pointer-events:none}
+  #scan h1{font-family:'Cinzel',serif;font-weight:700;font-size:clamp(22px,7vw,34px);
+    letter-spacing:.05em;margin:0;line-height:1.25}
+  #scan p{margin:0;font-size:15px;line-height:1.6;opacity:.7;max-width:26ch}
+  .reticle{width:76px;height:76px;margin:0 auto;position:relative}
+  .reticle span{position:absolute;width:18px;height:18px;border:1px solid var(--gilt);opacity:.7}
+  .reticle span:nth-child(1){top:0;left:0;border-right:0;border-bottom:0}
+  .reticle span:nth-child(2){top:0;right:0;border-left:0;border-bottom:0}
+  .reticle span:nth-child(3){bottom:0;left:0;border-right:0;border-top:0}
+  .reticle span:nth-child(4){bottom:0;right:0;border-left:0;border-top:0}
+  .reticle::after{content:"";position:absolute;inset:26px;border-radius:50%;
+    background:var(--keylight);opacity:.5;animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(.55);opacity:.25}50%{transform:scale(1);opacity:.6}}
+
+  #tray{display:flex;flex-direction:column;gap:12px;align-items:center;
+    opacity:0;transform:translateY(14px);transition:opacity .45s ease,transform .45s ease}
+  #tray.up{opacity:1;transform:none}
+
+  /* ---- pose selector ---- */
+  #poses{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
+  .pose{position:relative;display:inline-flex;align-items:center;gap:6px;
+    font-family:'Cinzel',serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--bone);border:1px solid rgba(232,228,218,.22);border-radius:999px;
+    padding:9px 16px;background:linear-gradient(160deg,rgba(58,40,70,.5),rgba(18,20,31,.66));
+    backdrop-filter:blur(9px);box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+    cursor:pointer;transition:transform .2s ease,border-color .25s ease,color .25s ease,box-shadow .3s ease,background .25s ease}
+  .pose:hover{transform:translateY(-1px)}
+  .pose[aria-pressed="true"]{border-color:var(--gilt);color:var(--gilt);
+    background:rgba(30,22,42,.9);box-shadow:0 0 16px rgba(201,162,39,.28),inset 0 1px 0 rgba(255,255,255,.07)}
+  .pose[data-locked="true"]{color:rgba(232,228,218,.42)}
+  .pose[data-locked="true"] .kh{display:block}
+  .pose .kh{display:none;width:8px;height:10px;flex:0 0 auto}
+  .pose .kh path{fill:var(--gilt);opacity:.8}
+  .pose:focus-visible{outline:1px solid var(--keylight);outline-offset:4px}
+
+  /* ---- signature: the keyhole unlock ---- */
+  #unlock{border:0;background:transparent;padding:0;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:7px}
+  #unlock .glyph{width:44px;height:54px;display:block}
+  #unlock .glyph path{fill:none;stroke:var(--gilt);stroke-width:5;transition:stroke .4s ease}
+  #unlock .fill{fill:var(--keylight);opacity:0;transition:opacity .6s ease}
+  #unlock:hover .glyph path,#unlock:focus-visible .glyph path{stroke:var(--keylight)}
+  #unlock:focus-visible{outline:1px solid var(--keylight);outline-offset:8px}
+  #unlock .label{font-family:'Cinzel',serif;font-size:12px;letter-spacing:.22em;
+    text-transform:uppercase}
+  #unlock .sub{font-size:12px;opacity:.55;margin-top:-3px}
+  #unlock[data-state="open"]{display:none}
+  #unlock[disabled]{opacity:.5;cursor:default}
+
+  #links{display:flex;gap:11px;flex-wrap:wrap;justify-content:center}
+  #links a{position:relative;display:inline-flex;align-items:center;gap:7px;text-decoration:none;
+    color:var(--bone);font-family:'Cinzel',serif;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+    padding:11px 22px;border-radius:999px;border:1px solid rgba(232,228,218,.28);
+    background:linear-gradient(160deg,rgba(60,40,72,.55),rgba(18,20,31,.6));backdrop-filter:blur(9px);
+    box-shadow:0 2px 10px rgba(9,7,20,.35),inset 0 1px 0 rgba(255,255,255,.06);
+    transition:transform .2s ease,border-color .25s ease,box-shadow .3s ease,color .25s ease}
+  #links a::before{content:'\2726';font-size:10px;color:var(--gilt);opacity:.85;transition:transform .3s ease}
+  #links a[data-action="unlock"]::before{content:'\2665'}
+  #links a:hover,#links a:focus-visible{transform:translateY(-2px);border-color:var(--gilt);color:var(--gilt);
+    box-shadow:0 6px 22px rgba(201,162,39,.3),inset 0 1px 0 rgba(255,255,255,.08)}
+  #links a:hover::before{transform:rotate(90deg) scale(1.15)}
+
+  #status{font-size:12px;letter-spacing:.05em;text-align:center;min-height:15px;opacity:.75}
+  #status.err{color:var(--ember);opacity:1}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.01ms!important;transition-duration:.01ms!important}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+
+<!-- one element, all poses. Never visible directly. -->
+<video id="poseVideo" playsinline webkit-playsinline muted preload="auto"></video>
+
+<div id="scan">
+  <div class="reticle"><span></span><span></span><span></span><span></span></div>
+  <h1>Find the Keyhole</h1>
+  <p>Point your camera at the card. Hold steady, then move around it.</p>
+</div>
+
+<div class="hud">
+  <div class="eyebrow">Zoe &middot; Games</div>
+
+  <div id="tray">
+    <div id="status"></div>
+    <nav id="poses" aria-label="Choose a pose"></nav>
+
+    <button id="unlock" data-state="locked">
+      <svg class="glyph" viewBox="0 0 52 64" aria-hidden="true">
+        <path class="fill" d="M26 6a15 15 0 0 1 8.6 27.3L40 58H12l5.4-24.7A15 15 0 0 1 26 6z"/>
+        <path d="M26 6a15 15 0 0 1 8.6 27.3L40 58H12l5.4-24.7A15 15 0 0 1 26 6z"/>
+      </svg>
+      <span class="label">Unlock</span>
+      <span class="sub">Open the rest of the room</span>
+    </button>
+
+    <nav id="links" aria-label="Find me elsewhere"></nav>
+  </div>
+</div>
+
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import {MindARThree} from 'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js';
+
+/* ═══════════════════════════════════════════════════════════
+   CONFIG
+   ═══════════════════════════════════════════════════════════ */
+const CONFIG = {
+  targetSrc:  './targets.mind',
+
+  // Public file: the free pose only. Safe to ship — it's all anyone gets unpaid.
+  freeVideo:  './pose-free.mp4',
+
+  // Full reel lives in R2 and only arrives via a signed URL after unlock.
+  workerUrl:  'https://YOUR-WORKER.workers.dev',
+  paymentUrl: 'https://buy.stripe.com/YOUR_LINK',
+
+  mode: 'pay',                                    // 'pay' | 'follow'
+  followUrl: 'https://instagram.com/YOURHANDLE',
+
+  // Timecodes within the FULL reel, in seconds.
+  // The free pose must be listed first and must match pose-free.mp4.
+  poses: [
+    {label:'Wave',     start: 0.0, end: 4.0, locked:false},
+    {label:'Curled Up',start: 4.0, end: 8.0, locked:true },
+    {label:'Spellcast',start: 8.0, end:12.0, locked:true },
+    {label:'Blow a Kiss',start:12.0, end:16.0, locked:true }
+  ],
+
+  // Painted room panels
+  art: {
+    back:    './art/room-back.png',
+    side:    './art/room-side.png',
+    floor:   './art/room-floor.png',
+    ceiling: './art/room-ceiling.png'
+  },
+
+  // Value-matching multipliers. The side panel came back brighter and bluer
+  // than the back wall; these pull the set into one room. Tune by eye.
+  grade: {
+    back:    0xFFFFFF,
+    side:    0xE8C4CF,
+    floor:   0xDCC9D8,
+    ceiling: 0xEADCE4
+  },
+
+  // TEST MODE — use a still until the reel is shot.
+  // 'video' = pose reel, 'image' = single still of Zoe standing in the room.
+  // zoe-cutout.png is a transparent cut-out (from zoe.jpg, colour-graded to the
+  // room). key:false uses the PNG's own alpha. Switch to key:'green' only if
+  // you regenerate on a chroma-green background.
+  media: { type:'image', image:'./art/zoe-cutout.png', key:false },
+
+  // ── Cut-out prop layers → the parallax depth ─────────────────────────
+  // Each prop is its OWN plane at its OWN depth, so they slide past each other
+  // as the phone moves. That parallax is what turns five flat walls into a
+  // space Zoe lives in. Generate each object on a flat chroma-green background
+  // (prompts in docs/grok-prompts.md) and set key:'green'.
+  //   depth : 0 = flat on the back wall, 1 = right up at the keyhole
+  //   x, y  : offset from room centre in room-width units (+x = right, +y = up)
+  //   scale : height as a fraction of the room (1.0 = floor-to-ceiling)
+  // A file that doesn't exist yet just stays invisible — add art gradually.
+  // These PNGs are already keyed to transparency (background removed), so
+  // key:false — the engine uses each file's own alpha. Regenerate on green and
+  // re-key if you edit them. Couch sits right, at mid-depth, as requested.
+  layers: [
+    { src:'./art/couch.png',      x: 0.17, y:-0.15, depth:0.40, scale:0.34, key:false },
+    { src:'./art/candelabra.png', x: 0.27, y:-0.05, depth:0.30, scale:0.40, key:false },
+    { src:'./art/frames.png',     x:-0.24, y: 0.12, depth:0.06, scale:0.34, key:false },
+    { src:'./art/bookshelf.png',  x:-0.27, y:-0.04, depth:0.14, scale:0.60, key:false },
+
+    // ── Glow overlays (key:'add') — generate on PURE BLACK; black adds
+    // nothing under additive blending, so only the light shows. These stay
+    // invisible until the file exists. See docs/grok-prompts.md section 9.
+    { src:'./art/fx-moonbeam.png',  x: 0.30, y: 0.05, depth:0.20, scale:0.85, key:'add' },
+    { src:'./art/fx-candleglow.png',x: 0.27, y:-0.02, depth:0.31, scale:0.30, key:'add' },
+    { src:'./art/fx-crystal.png',   x:-0.24, y:-0.04, depth:0.15, scale:0.30, key:'add' }
+  ],
+
+  // The printed aperture, measured off card-front.png, in card-width units.
+  // openTo is how far the portal blooms past the print once tracking locks.
+  // Measured against card-front.png as it stands (1.49:1). These change when
+  // you recompose to 1.75:1 — re-measure then, or the portal will sit off-centre.
+  aperture: { r:0.1102, cy:0.1378, topHalf:0.0621, botHalf:0.1018, bottomY:-0.2332, openTo:1.35 },
+
+  // Where the peep sits inside the 3D room, as a fraction of room height from
+  // the floor (0.5 = mid-door, higher = floor drops under the hole / higher POV).
+  keyholeInRoom: 0.68,
+
+  // Soft light spilling out around the keyhole.
+  glow: {
+    color:    0x9FD8FF,  // pale arcane blue; try 0xC9A227 for warm gold
+    layers:   9,         // more = smoother falloff, marginally more draw calls
+    spread:   0.42,      // how far past the rim the light reaches
+    strength: 0.17,      // peak brightness at the rim
+    falloff:  2.2,       // higher = tighter, hotter core
+    breathe:  0.22,      // depth of the slow pulse; 0 for a steady glow
+    period:   3600       // ms per breath
+  },
+
+  // Magical atmosphere — floating motes + soft flickering light blooms.
+  // Everything here fades in as the portal opens and respects reduced-motion.
+  // Turn a piece off with enabled:false (motes) or an empty lights list.
+  atmosphere: {
+    motes: {
+      enabled: true,
+      count:   40,
+      color:   0xBFE6FF,   // pale arcane blue
+      size:    0.014,      // dot size, world units
+      drift:   0.02,       // how far each mote wanders from home
+      speed:   0.5,        // drift speed
+      twinkle: 0.6         // 0..1 depth of the brightness flicker
+    },
+    // One soft bloom over each candle / crystal cluster. x,y in room-width
+    // units from centre; depth 0 = back wall … 1 = portal. rate = flickers/sec.
+    lights: [
+      { x: 0.26, y: 0.02, depth:0.30, r:0.12, color:0x9FD8FF, strength:0.50, flicker:0.5, rate:7 }, // candelabra, right
+      { x:-0.24, y:-0.02, depth:0.14, r:0.10, color:0x7CF5D0, strength:0.42, flicker:0.4, rate:5 }  // crystals, left
+    ]
+  },
+
+  // Chroma key. Set enabled:false if your footage already has a clean background.
+  key: {
+    enabled:    true,
+    color:      0x00B140,  // sample your actual green with a colour picker
+    similarity: 0.36,      // raise if green survives at the edges
+    smoothness: 0.10,      // raise for softer, more forgiving edges
+    spill:      0.12       // raise to kill green fringing on hair
+  },
+
+  // Two buttons. 'Socials' opens a URL (your linktree / main handle); 'Unblurs'
+  // triggers the unlock flow (pay or follow, per `mode`) — no URL needed.
+  links: [
+    {label:'Socials',  url:'https://instagram.com/YOURHANDLE'},
+    {label:'Unblurs',  action:'unlock'}
+  ]
+};
+
+/* ═══════════════════════════════════════════════════════════
+   KEYHOLE GEOMETRY
+   ═══════════════════════════════════════════════════════════ */
+function keyholeShape(r, topHalf, botHalf, bottomY, cy){
+  const yJoin = cy - Math.sqrt(r*r - topHalf*topHalf);
+  const s = new THREE.Shape();
+  s.moveTo(topHalf, yJoin);
+  s.absarc(0, cy, r, Math.atan2(yJoin-cy, topHalf), Math.atan2(yJoin-cy, -topHalf), false);
+  s.lineTo(-botHalf, bottomY);
+  s.lineTo( botHalf, bottomY);
+  s.closePath();
+  return s;
+}
+const A    = CONFIG.aperture;
+const KEY  = {r:A.r, top:A.topHalf, bot:A.botHalf, bottomY:A.bottomY, cy:A.cy};
+const hole = keyholeShape(KEY.r, KEY.top, KEY.bot, KEY.bottomY, KEY.cy);
+const wide = keyholeShape(KEY.r*1.10, KEY.top*1.16, KEY.bot*1.13, KEY.bottomY*1.10, KEY.cy);
+
+/* ═══════════════════════════════════════════════════════════
+   SCENE
+   ═══════════════════════════════════════════════════════════ */
+const mindar = new MindARThree({
+  container: document.getElementById('stage'),
+  imageTargetSrc: CONFIG.targetSrc,
+  uiLoading:'no', uiScanning:'no', uiError:'no',
+  filterMinCF: 0.0001, filterBeta: 0.001
+});
+const {renderer, scene, camera} = mindar;
+renderer.setClearAlpha(0);
+
+const anchor = mindar.addAnchor(0);
+const portal = new THREE.Group();
+anchor.group.add(portal);
+
+const STENCIL = 1;
+function insidePortal(mat){
+  mat.stencilWrite = true;
+  mat.stencilRef   = STENCIL;
+  mat.stencilFunc  = THREE.EqualStencilFunc;
+  mat.side         = THREE.DoubleSide;
+  return mat;
+}
+
+const mask = new THREE.Mesh(
+  new THREE.ShapeGeometry(hole, 64),
+  new THREE.MeshBasicMaterial({
+    colorWrite:false, depthWrite:false,
+    stencilWrite:true, stencilRef:STENCIL,
+    stencilFunc:THREE.AlwaysStencilFunc,
+    stencilZPass:THREE.ReplaceStencilOp
+  })
+);
+mask.renderOrder = 1;
+portal.add(mask);
+
+const DEPTH = 0.62, ROOM_W = 0.62, ROOM_H = 0.62;
+const room = new THREE.Group(); room.renderOrder = 2; portal.add(room);
+
+const loader = new THREE.TextureLoader();
+function panel(src, grade, mirror){
+  const mat = insidePortal(new THREE.MeshBasicMaterial({
+    color: new THREE.Color(grade), toneMapped:false
+  }));
+  loader.load(src, t=>{
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.minFilter  = THREE.LinearFilter;
+    t.generateMipmaps = false;
+    if (mirror){ t.wrapS = THREE.RepeatWrapping; t.repeat.x = -1; t.offset.x = 1; }
+    mat.map = t; mat.needsUpdate = true;
+  });
+  return mat;
+}
+function wall(w,h,pos,rot,mat){
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w,h), mat);
+  m.position.set(...pos); m.rotation.set(...rot); m.renderOrder = 2;
+  room.add(m); return m;
+}
+// Vertical placement of the room under the fixed keyhole mask. Driven by
+// CONFIG.keyholeInRoom (see CONFIG). Higher value → floor lower under the peep.
+const KEYHOLE_IN_ROOM = CONFIG.keyholeInRoom ?? 0.68;
+const CY = KEY.cy - ROOM_H * (KEYHOLE_IN_ROOM - 0.5);
+const G  = CONFIG.grade;
+const backWall = wall(ROOM_W, ROOM_H, [0, CY, -DEPTH], [0,0,0],
+                      panel(CONFIG.art.back, G.back, false));
+wall(DEPTH, ROOM_H, [-ROOM_W/2, CY, -DEPTH/2], [0, Math.PI/2, 0],
+     panel(CONFIG.art.side, G.side, false));
+wall(DEPTH, ROOM_H, [ ROOM_W/2, CY, -DEPTH/2], [0,-Math.PI/2, 0],
+     panel(CONFIG.art.side, G.side, true));
+// Floor: extend it forward (toward the viewer, past the portal plane) so its
+// front edge drops down into the keyhole's bottom stem. A flat floor seen at a
+// grazing angle projects its front edge UP into the aperture, leaving the stem
+// empty; the extra length fills it. It's stencil-clipped to the keyhole, so the
+// overhang only ever shows inside the hole. Bump FLOOR_FRONT if a gap remains.
+// Slightly longer with the higher peep so the stem still fills with floor.
+const FLOOR_FRONT = 0.42;
+const floorLen    = DEPTH + FLOOR_FRONT;
+wall(ROOM_W, floorLen, [0, CY-ROOM_H/2, (-DEPTH + FLOOR_FRONT)/2], [-Math.PI/2,0,0],
+     panel(CONFIG.art.floor, G.floor, false));
+wall(ROOM_W, DEPTH, [0, CY+ROOM_H/2, -DEPTH/2], [ Math.PI/2,0,0],
+     panel(CONFIG.art.ceiling, G.ceiling, false));
+
+/* ═══════════════════════════════════════════════════════════
+   VIDEO + CHROMA KEY
+   ═══════════════════════════════════════════════════════════ */
+const IMAGE_MODE = CONFIG.media.type === 'image';
+
+const video = document.getElementById('poseVideo');
+let sourceTex;
+
+if (IMAGE_MODE){
+  // Zoe cut-out in front of the painted room (not a full-frame room still).
+  // Aspect is corrected once the texture loads so she keeps her true proportions
+  // (see fitZoeAspect below — after poseMesh exists).
+  sourceTex = loader.load(CONFIG.media.image, t=>{
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.minFilter  = THREE.LinearFilter;
+    t.generateMipmaps = false;
+    fitZoeAspect(t);
+  });
+  // Keep the painted back wall as a solid backdrop. The Zoe cut-out is narrower
+  // than the room, so hiding the wall left see-through strips on either side
+  // and in the back corners of the floor. Showing the wall closes the box.
+  backWall.visible = true;
+}else{
+  video.crossOrigin = 'anonymous';
+  video.loop = true;               // free clip loops natively
+  video.src  = CONFIG.freeVideo;
+  sourceTex = new THREE.VideoTexture(video);
+  sourceTex.minFilter = THREE.LinearFilter;
+  sourceTex.magFilter = THREE.LinearFilter;
+  sourceTex.generateMipmaps = false;
+}
+const videoTex = sourceTex;
+
+const poseMat = insidePortal(new THREE.ShaderMaterial({
+  transparent: true,
+  depthWrite:  false,
+  uniforms: {
+    map:        {value: videoTex},
+    keyColor:   {value: new THREE.Color(CONFIG.key.color)},
+    similarity: {value: CONFIG.key.similarity},
+    smoothness: {value: CONFIG.key.smoothness},
+    spill:      {value: CONFIG.key.spill},
+    keyOn:      {value: (IMAGE_MODE ? (CONFIG.media.key === 'green')
+                                    : CONFIG.key.enabled) ? 1.0 : 0.0},
+    fade:       {value: 1.0}
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main(){
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: `
+    uniform sampler2D map;
+    uniform vec3  keyColor;
+    uniform float similarity, smoothness, spill, keyOn, fade;
+    varying vec2 vUv;
+
+    vec2 toUV(vec3 c){
+      return vec2(dot(c, vec3(-0.169, -0.331,  0.500)) + 0.5,
+                  dot(c, vec3( 0.500, -0.419, -0.081)) + 0.5);
+    }
+    vec3 toLinear(vec3 c){
+      return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+    }
+
+    void main(){
+      vec4  tex   = texture2D(map, vUv);
+      vec3  rgb   = tex.rgb;
+      float alpha = tex.a;          // respect a transparent cut-out's own alpha
+
+      if (keyOn > 0.5){
+        float dist = distance(toUV(rgb), toUV(keyColor));
+        alpha = smoothstep(similarity, similarity + smoothness, dist);
+
+        // despill: pull chroma toward luma wherever the key is weak
+        float luma = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+        rgb = mix(vec3(luma), rgb, clamp(alpha + spill, 0.0, 1.0));
+      }
+
+      if (alpha < 0.02) discard;
+      gl_FragColor = vec4(toLinear(rgb), alpha * fade);
+    }`
+}));
+
+// ── Zoe placement (image mode) ──────────────────────────────────────────
+// ZOE_FORWARD: how far she steps off the back wall toward you.
+//   0.0 = flat against the back wall (old behaviour), 1.0 = up at the portal.
+// ZOE_SIZE: her scale. 1.0 = full room height; drop it if she looms too large
+//   once she's closer to the camera.
+// ZOE_Y: vertical offset from room centre. Negative lowers her toward the floor
+//   (good for a crouching / seated cut-out whose feet sit at the bottom edge).
+const ZOE_FORWARD = 0.42;
+const ZOE_SIZE    = 0.82;
+const ZOE_Y       = -0.04;
+const zoeZ = -DEPTH * (0.99 - ZOE_FORWARD * 0.85);   // 0.99 back → 0.14 at portal
+
+const poseMesh = IMAGE_MODE
+  ? new THREE.Mesh(new THREE.PlaneGeometry(ROOM_H * 0.61 * ZOE_SIZE, ROOM_H * ZOE_SIZE), poseMat)
+  : new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.45), poseMat);
+poseMesh.position.set(0, CY + (IMAGE_MODE ? ZOE_Y : 0.005),
+                      IMAGE_MODE ? zoeZ : -DEPTH * 0.62);
+// Draw order rises with how far forward a thing sits, so nearer things paint
+// over farther ones (everything here is depthWrite:false). Zoe uses her own
+// forward amount; props below use theirs.
+poseMesh.renderOrder = 3 + (IMAGE_MODE ? ZOE_FORWARD : 0.62);
+room.add(poseMesh);
+
+function fitZoeAspect(t){
+  if (!IMAGE_MODE || !poseMesh || !t?.image?.width || !t.image.height) return;
+  const ar = t.image.width / t.image.height;
+  const h  = ROOM_H * ZOE_SIZE;
+  poseMesh.geometry.dispose();
+  poseMesh.geometry = new THREE.PlaneGeometry(h * ar, h);
+}
+
+// ── Cut-out prop layers → parallax depth ────────────────────────────────
+// Builds one keyhole-clipped plane per CONFIG.layers entry. key:'green'
+// chroma-keys a green background; otherwise a transparent PNG's own alpha is
+// used. Missing files stay invisible so art can land one piece at a time.
+function cutoutMat(keyMode){
+  if (keyMode === 'add'){                 // black-background glow overlay:
+    return insidePortal(new THREE.MeshBasicMaterial({   // black adds nothing
+      map:null, transparent:true, blending:THREE.AdditiveBlending,
+      depthWrite:false, toneMapped:false
+    }));
+  }
+  if (keyMode !== 'green'){
+    return insidePortal(new THREE.MeshBasicMaterial({
+      transparent:true, alphaTest:0.03, depthWrite:false, toneMapped:false
+    }));
+  }
+  return insidePortal(new THREE.ShaderMaterial({
+    transparent:true, depthWrite:false,
+    uniforms:{
+      map:{value:null},
+      keyColor:{value:new THREE.Color(CONFIG.key.color)},
+      similarity:{value:CONFIG.key.similarity},
+      smoothness:{value:CONFIG.key.smoothness},
+      spill:{value:CONFIG.key.spill}
+    },
+    vertexShader:`
+      varying vec2 vUv;
+      void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+    fragmentShader:`
+      uniform sampler2D map; uniform vec3 keyColor;
+      uniform float similarity, smoothness, spill; varying vec2 vUv;
+      vec2 toUV(vec3 c){ return vec2(dot(c,vec3(-0.169,-0.331,0.500))+0.5,
+                                     dot(c,vec3( 0.500,-0.419,-0.081))+0.5); }
+      vec3 toLinear(vec3 c){ return mix(c/12.92, pow((c+0.055)/1.055, vec3(2.4)), step(vec3(0.04045), c)); }
+      void main(){
+        vec4  tx    = texture2D(map, vUv);
+        float dist  = distance(toUV(tx.rgb), toUV(keyColor));
+        float alpha = smoothstep(similarity, similarity + smoothness, dist);
+        float luma  = dot(tx.rgb, vec3(0.2126, 0.7152, 0.0722));
+        vec3  rgb   = mix(vec3(luma), tx.rgb, clamp(alpha + spill, 0.0, 1.0));
+        alpha *= tx.a;
+        if (alpha < 0.03) discard;
+        gl_FragColor = vec4(toLinear(rgb), alpha);
+      }`
+  }));
+}
+(CONFIG.layers || []).forEach(L=>{
+  const depth = L.depth ?? 0.3;
+  const h     = ROOM_H * (L.scale ?? 0.5);
+  const mat   = cutoutMat(L.key);
+  const mesh  = new THREE.Mesh(new THREE.PlaneGeometry(h, h), mat);
+  mesh.position.set(L.x ?? 0, CY + (L.y ?? 0), -DEPTH * (0.99 - depth * 0.85));
+  mesh.renderOrder = 3 + Math.min(depth, 0.9);
+  mesh.visible = false;                 // hidden until its texture loads
+  room.add(mesh);
+  loader.load(L.src, t=>{
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.minFilter  = THREE.LinearFilter;
+    t.generateMipmaps = false;
+    const ar = (t.image && t.image.width && t.image.height)
+      ? t.image.width / t.image.height : 1;
+    mesh.geometry.dispose();
+    mesh.geometry = new THREE.PlaneGeometry(h * ar, h);   // keep true proportions
+    if (mat.uniforms) mat.uniforms.map.value = t; else mat.map = t;
+    mat.needsUpdate = true;
+    mesh.visible = true;
+  }, undefined, ()=>{ /* file not there yet — leave it hidden */ });
+});
+
+const halo = new THREE.Mesh(
+  new THREE.CircleGeometry(0.24, 48),
+  insidePortal(new THREE.MeshBasicMaterial({
+    color:0x9FD8FF, transparent:true, opacity:0.16,
+    blending:THREE.AdditiveBlending, depthWrite:false
+  }))
+);
+halo.position.set(0, CY + 0.03, -DEPTH * 0.97);
+halo.renderOrder = 2;
+room.add(halo);
+
+const rimShape = wide.clone();
+rimShape.holes.push(new THREE.Path(hole.getPoints(64)));
+const rim = new THREE.Mesh(
+  new THREE.ShapeGeometry(rimShape, 64),
+  new THREE.MeshBasicMaterial({color:0xC9A227, transparent:true, opacity:0.95,
+    side:THREE.DoubleSide, depthWrite:false})
+);
+rim.position.z = 0.001; rim.renderOrder = 5;
+portal.add(rim);
+
+/* ── soft glow spilling out around the keyhole ──────────────────────
+   Nested keyhole silhouettes, additive, opacity falling off outward.
+   Follows the shape exactly, costs nothing, and needs no post-processing
+   (a real bloom pass would fight the stencil and stall on older phones). */
+const glow = new THREE.Group();
+glow.renderOrder = 4;
+portal.add(glow);
+
+const GLOW = CONFIG.glow;
+const layers = [];
+for (let i = 0; i < GLOW.layers; i++){
+  const t     = i / (GLOW.layers - 1);          // 0 = tight, 1 = widest
+  const scale = 1 + GLOW.spread * t;
+  const ring  = keyholeShape(KEY.r*scale, KEY.top*scale, KEY.bot*scale,
+                             KEY.bottomY*scale, KEY.cy*scale);
+  ring.holes.push(new THREE.Path(hole.getPoints(64)));
+
+  const mat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(GLOW.color),
+    transparent: true,
+    opacity: GLOW.strength * Math.pow(1 - t, GLOW.falloff),
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  });
+
+  const m = new THREE.Mesh(new THREE.ShapeGeometry(ring, 48), mat);
+  m.position.z = 0.0005 - i * 0.00002;          // avoid z-fighting
+  m.renderOrder = 4;
+  glow.add(m);
+  layers.push({mat, base: mat.opacity});
+}
+
+/* ── magical atmosphere: floating motes + soft light blooms ─────────────
+   Cheap additive sprites living inside the room, stencil-clipped to the
+   keyhole and parallaxing with everything else. updateAtmosphere() is driven
+   by the render loop; `e` (portal-open 0..1) fades it in on lock. */
+const AT = CONFIG.atmosphere || {};
+const layerZ = d => -DEPTH * (0.99 - d * 0.85);
+
+function softDot(){
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d').createRadialGradient(32,32,0,32,32,32);
+  g.addColorStop(0,   'rgba(255,255,255,1)');
+  g.addColorStop(0.35,'rgba(255,255,255,0.55)');
+  g.addColorStop(1,   'rgba(255,255,255,0)');
+  const x = c.getContext('2d'); x.fillStyle = g; x.fillRect(0,0,64,64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const dotTex = softDot();
+
+let moteState = null;
+if (AT.motes && AT.motes.enabled){
+  const M = AT.motes, n = Math.max(0, M.count|0);
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(n*3), col = new Float32Array(n*3);
+  const c = new THREE.Color(M.color), base = [];
+  for (let i=0;i<n;i++){
+    const bx = (Math.random()*2-1)*0.30;
+    const by = CY + (Math.random()*2-1)*0.28;
+    const bz = -DEPTH*(0.08 + Math.random()*0.84);
+    base.push({bx,by,bz, px:Math.random()*6.28, py:Math.random()*6.28,
+               pz:Math.random()*6.28, tw:Math.random()*6.28, sp:0.6+Math.random()*0.8});
+    pos[i*3]=bx; pos[i*3+1]=by; pos[i*3+2]=bz;
+    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(col,3));
+  const mat = insidePortal(new THREE.PointsMaterial({
+    size:M.size, map:dotTex, vertexColors:true, transparent:true,
+    blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true, toneMapped:false
+  }));
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false; pts.renderOrder = 3.6;
+  room.add(pts);
+  moteState = {M, geo, base, c, pos, col};
+}
+
+const bloomLights = (AT.lights || []).map(L=>{
+  const mat = insidePortal(new THREE.MeshBasicMaterial({
+    map:dotTex, color:new THREE.Color(L.color), transparent:true, opacity:0,
+    blending:THREE.AdditiveBlending, depthWrite:false, toneMapped:false
+  }));
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(L.r*2, L.r*2), mat);
+  m.position.set(L.x, CY + (L.y||0), layerZ(L.depth ?? 0.3));
+  m.renderOrder = 3.4;
+  room.add(m);
+  return {L, mat, base:L.strength ?? 0.5, phase:Math.random()*6.28};
+});
+
+function updateAtmosphere(now, e){
+  const t = now / 1000;
+  if (moteState){
+    const {M, geo, base, c, pos, col} = moteState;
+    for (let i=0;i<base.length;i++){
+      const b = base[i];
+      if (!reduced){
+        pos[i*3]   = b.bx + Math.sin(t*M.speed*b.sp        + b.px)*M.drift;
+        pos[i*3+1] = b.by + Math.cos(t*M.speed*b.sp*0.8     + b.py)*M.drift;
+        pos[i*3+2] = b.bz + Math.sin(t*M.speed*b.sp*0.6     + b.pz)*M.drift*0.6;
+      }
+      const flick = reduced ? 1 : 1 - M.twinkle*0.5*(1+Math.sin(t*2.2*b.sp + b.tw));
+      const k = Math.max(0, flick) * e;
+      col[i*3]=c.r*k; col[i*3+1]=c.g*k; col[i*3+2]=c.b*k;
+    }
+    geo.attributes.position.needsUpdate = true;
+    geo.attributes.color.needsUpdate = true;
+  }
+  for (const g of bloomLights){
+    const f = reduced ? 1 : 1 - g.L.flicker*0.5*(1+Math.sin(t*(g.L.rate||6) + g.phase));
+    g.mat.opacity = g.base * Math.max(0.1, f) * e;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   POSE PLAYBACK
+   Locked   → pose-free.mp4 loops end to end.
+   Unlocked → full reel loads, playback loops inside a timecode window.
+   ═══════════════════════════════════════════════════════════ */
+let unlocked = false;
+let current  = 0;
+let fadeUntil = 0;
+
+const segment = ()=> CONFIG.poses[current];
+
+function selectPose(i){
+  const p = CONFIG.poses[i];
+  if (p.locked && !unlocked){ pulseUnlock(); return; }
+  current = i;
+  fadeUntil = performance.now() + 260;   // brief dip hides the seek
+  if (unlocked) video.currentTime = p.start;
+  paintPoseButtons();
+  if(!IMAGE_MODE) video.play().catch(()=>{});
+}
+
+function holdSegment(){
+  if (IMAGE_MODE || !unlocked) return;                 // free clip handles its own loop
+  const s = segment();
+  if (video.currentTime >= s.end - 0.04 || video.currentTime < s.start - 0.10){
+    video.currentTime = s.start;
+  }
+}
+video.addEventListener('timeupdate', holdSegment);
+
+/* ═══════════════════════════════════════════════════════════
+   UI
+   ═══════════════════════════════════════════════════════════ */
+const scanEl   = document.getElementById('scan');
+const trayEl   = document.getElementById('tray');
+const posesEl  = document.getElementById('poses');
+const unlockEl = document.getElementById('unlock');
+const statusEl = document.getElementById('status');
+const linksEl  = document.getElementById('links');
+
+const KH_PATH = 'M4 0a3 3 0 0 1 1.7 5.5L6.8 10H1.2l1.1-4.5A3 3 0 0 1 4 0z';
+
+function paintPoseButtons(){
+  posesEl.innerHTML = '';
+  CONFIG.poses.forEach((p, i)=>{
+    const b = document.createElement('button');
+    b.className = 'pose';
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(i === current));
+    b.dataset.locked = String(!!p.locked && !unlocked);
+    b.innerHTML =
+      `<svg class="kh" viewBox="0 0 8 10" aria-hidden="true"><path d="${KH_PATH}"/></svg>` +
+      `<span>${p.label}</span>`;
+    b.addEventListener('click', ()=> selectPose(i));
+    posesEl.appendChild(b);
+  });
+}
+paintPoseButtons();
+if (IMAGE_MODE){ posesEl.style.display='none'; }
+
+CONFIG.links.forEach(l=>{
+  const a = document.createElement('a');
+  a.textContent = l.label;
+  if (l.action === 'unlock'){
+    a.href = '#'; a.dataset.action = 'unlock';
+    a.addEventListener('click', e=>{ e.preventDefault(); triggerUnlock(); });
+  }else{
+    a.href = l.url; a.target = '_blank'; a.rel = 'noopener';
+  }
+  linksEl.appendChild(a);
+});
+// If an 'Unblurs' link handles unlocking, retire the standalone keyhole button
+// so there's a single, clear call to action.
+if (CONFIG.links.some(l=>l.action === 'unlock')) unlockEl.style.display = 'none';
+
+if (CONFIG.mode === 'follow'){
+  unlockEl.querySelector('.label').textContent = 'Follow to open';
+  unlockEl.querySelector('.sub').textContent   = 'One tap, then come back';
+}
+
+function say(msg, isError){
+  statusEl.textContent = msg || '';
+  statusEl.classList.toggle('err', !!isError);
+}
+function pulseUnlock(){
+  say(CONFIG.mode === 'follow' ? 'Follow to open this one' : 'Locked — tap the keyhole');
+  unlockEl.animate(
+    [{transform:'scale(1)'},{transform:'scale(1.12)'},{transform:'scale(1)'}],
+    {duration:420, easing:'ease-out'}
+  );
+}
+
+let found = false, t0 = null;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+anchor.onTargetFound = ()=>{
+  found = true; t0 = performance.now();
+  scanEl.classList.add('gone');
+  trayEl.classList.add('up');
+  if(!IMAGE_MODE) video.play().catch(()=>{});
+};
+anchor.onTargetLost = ()=>{
+  found = false;
+  for (const l of layers) l.mat.opacity = 0;
+  trayEl.classList.remove('up');
+  scanEl.classList.remove('gone');
+};
+
+// iOS will not start a video without a real gesture
+document.addEventListener('pointerdown', ()=> video.play().catch(()=>{}), {once:true});
+
+/* ═══════════════════════════════════════════════════════════
+   UNLOCK
+   ═══════════════════════════════════════════════════════════ */
+function openFullReel(url){
+  return new Promise((res, rej)=>{
+    const onReady = ()=>{
+      video.removeEventListener('loadeddata', onReady);
+      unlocked   = true;
+      video.loop = false;                       // segment logic takes over
+      unlockEl.dataset.state = 'open';
+      video.currentTime = segment().start;
+      if(!IMAGE_MODE) video.play().catch(()=>{});
+      paintPoseButtons();
+      say('');
+      res();
+    };
+    video.addEventListener('loadeddata', onReady);
+    video.addEventListener('error', rej, {once:true});
+    video.src = url;
+    video.load();
+  });
+}
+
+async function redeem(sessionId){
+  say('Checking…');
+  try{
+    const r = await fetch(`${CONFIG.workerUrl}/redeem`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({session_id: sessionId})
+    });
+    if(!r.ok) throw new Error(await r.text());
+    const {url} = await r.json();
+    await openFullReel(url);
+  }catch(e){
+    say("That didn't go through. Tap to try again.", true);
+    unlockEl.disabled = false;
+  }
+}
+
+function triggerUnlock(){
+  if (unlocked) return;
+  if (CONFIG.mode === 'follow'){
+    window.open(CONFIG.followUrl, '_blank', 'noopener');
+    say('Welcome back — opening…');
+    setTimeout(()=> redeem('follow'), 900);
+  }else{
+    const back = encodeURIComponent(location.origin + location.pathname);
+    location.href = `${CONFIG.paymentUrl}?success_url=${back}`;
+  }
+}
+unlockEl.addEventListener('click', triggerUnlock);
+
+const params = new URLSearchParams(location.search);
+if (params.get('session_id')){
+  unlockEl.disabled = true;
+  redeem(params.get('session_id'));
+  history.replaceState({}, '', location.pathname);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RUN
+   ═══════════════════════════════════════════════════════════ */
+function diagnose(err){
+  const ua = navigator.userAgent;
+  const inApp = /FBAN|FBAV|Instagram|Line|Twitter|WebView|; wv\)/.test(ua);
+
+  if (!window.isSecureContext || location.protocol === 'file:'){
+    return ['Needs a web address',
+      'Cameras only work over https. Open this page from its hosted URL rather than as a downloaded file.'];
+  }
+  if (err && err.name === 'NotAllowedError'){
+    return inApp
+      ? ['Open in your browser',
+         'This in-app browser will not share the camera. Use the menu to open the page in Chrome or Safari.']
+      : ['Camera blocked',
+         'Allow camera access for this site, then reload.'];
+  }
+  if (err && (err.name === 'NotFoundError' || err.name === 'OverconstrainedError')){
+    return ['No camera found', 'This device has no camera the page can use.'];
+  }
+  if (err && err.name === 'NotReadableError'){
+    return ['Camera in use', 'Another app is holding the camera. Close it and reload.'];
+  }
+  return ['Could not start', (err && err.message) || 'Something went wrong starting the camera.'];
+}
+
+function fail(err){
+  const [title, detail] = diagnose(err);
+  scanEl.classList.remove('gone');
+  scanEl.querySelector('h1').textContent = title;
+  scanEl.querySelector('p').textContent  = detail;
+  console.error('[keyhole]', err);
+}
+
+(async ()=>{
+  // fail fast and clearly rather than letting MindAR throw from its own loop
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia){
+    fail(new Error('insecure context'));
+    return;
+  }
+
+  // missing tracker is the most common setup mistake; name it plainly
+  try{
+    const probe = await fetch(CONFIG.targetSrc, {method:'HEAD'});
+    if (!probe.ok) throw new Error('404');
+  }catch{
+    scanEl.classList.remove('gone');
+    scanEl.querySelector('h1').textContent = 'No tracker yet';
+    scanEl.querySelector('p').textContent =
+      'targets.mind is missing. Compile it from the card art and put it in the repo root.';
+    return;
+  }
+  try{
+    await mindar.start();
+    renderer.setAnimationLoop(()=>{
+      const now = performance.now();
+
+      let e = 0;
+      if (found && t0 !== null){
+        const k = reduced ? 1 : Math.min(1, (now - t0) / 700);
+        e = 1 - Math.pow(1 - k, 3);
+        // the printed keyhole is small; the portal blooms past it on lock
+        const grow = 1 + (A.openTo - 1) * e;
+        mask.scale.setScalar(grow);
+        rim.scale.setScalar(grow * (0.94 + 0.06 * e));
+        glow.scale.setScalar(grow);
+        rim.material.opacity  = 0.95 * e;
+        halo.material.opacity = 0.16 * e;
+
+        // the glow swells as the portal opens, then breathes
+        const breath = reduced ? 1
+          : 1 + GLOW.breathe * Math.sin(now / GLOW.period * Math.PI * 2);
+        for (const l of layers) l.mat.opacity = l.base * e * breath;
+      }
+
+      // dip the pose plane across a switch so the seek isn't visible
+      poseMat.uniforms.fade.value = now < fadeUntil
+        ? Math.abs((now - fadeUntil + 260) / 130 - 1)
+        : 1.0;
+
+      updateAtmosphere(now, e);
+
+      renderer.render(scene, camera);
+    });
+  }catch(e){
+    fail(e);
+  }
+})();
+</script>
+</body>
+</html>
