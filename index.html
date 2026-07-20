@@ -52,11 +52,13 @@
   #poses{display:flex;gap:7px;justify-content:center;flex-wrap:wrap}
   .pose{position:relative;display:inline-flex;align-items:center;gap:6px;
     font-family:'Cinzel',serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
-    color:var(--bone);border:1px solid rgba(232,228,218,.22);border-radius:2px;
-    padding:9px 14px;background:rgba(18,20,31,.66);backdrop-filter:blur(9px);
-    cursor:pointer;transition:border-color .25s ease,color .25s ease,background .25s ease}
+    color:var(--bone);border:1px solid rgba(232,228,218,.22);border-radius:999px;
+    padding:9px 16px;background:linear-gradient(160deg,rgba(58,40,70,.5),rgba(18,20,31,.66));
+    backdrop-filter:blur(9px);box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+    cursor:pointer;transition:transform .2s ease,border-color .25s ease,color .25s ease,box-shadow .3s ease,background .25s ease}
+  .pose:hover{transform:translateY(-1px)}
   .pose[aria-pressed="true"]{border-color:var(--gilt);color:var(--gilt);
-    background:rgba(18,20,31,.9)}
+    background:rgba(30,22,42,.9);box-shadow:0 0 16px rgba(201,162,39,.28),inset 0 1px 0 rgba(255,255,255,.07)}
   .pose[data-locked="true"]{color:rgba(232,228,218,.42)}
   .pose[data-locked="true"] .kh{display:block}
   .pose .kh{display:none;width:8px;height:10px;flex:0 0 auto}
@@ -77,12 +79,18 @@
   #unlock[data-state="open"]{display:none}
   #unlock[disabled]{opacity:.5;cursor:default}
 
-  #links{display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
-  #links a{display:inline-flex;text-decoration:none;color:var(--bone);font-size:13px;
-    letter-spacing:.05em;padding:8px 14px;border:1px solid rgba(232,228,218,.2);
-    border-radius:2px;background:rgba(18,20,31,.6);backdrop-filter:blur(9px);
-    transition:border-color .25s ease,background .25s ease}
-  #links a:hover,#links a:focus-visible{border-color:var(--gilt);background:rgba(18,20,31,.85)}
+  #links{display:flex;gap:11px;flex-wrap:wrap;justify-content:center}
+  #links a{position:relative;display:inline-flex;align-items:center;gap:7px;text-decoration:none;
+    color:var(--bone);font-family:'Cinzel',serif;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+    padding:11px 22px;border-radius:999px;border:1px solid rgba(232,228,218,.28);
+    background:linear-gradient(160deg,rgba(60,40,72,.55),rgba(18,20,31,.6));backdrop-filter:blur(9px);
+    box-shadow:0 2px 10px rgba(9,7,20,.35),inset 0 1px 0 rgba(255,255,255,.06);
+    transition:transform .2s ease,border-color .25s ease,box-shadow .3s ease,color .25s ease}
+  #links a::before{content:'\2726';font-size:10px;color:var(--gilt);opacity:.85;transition:transform .3s ease}
+  #links a[data-action="unlock"]::before{content:'\2665'}
+  #links a:hover,#links a:focus-visible{transform:translateY(-2px);border-color:var(--gilt);color:var(--gilt);
+    box-shadow:0 6px 22px rgba(201,162,39,.3),inset 0 1px 0 rgba(255,255,255,.08)}
+  #links a:hover::before{transform:rotate(90deg) scale(1.15)}
 
   #status{font-size:12px;letter-spacing:.05em;text-align:center;min-height:15px;opacity:.75}
   #status.err{color:var(--ember);opacity:1}
@@ -155,10 +163,10 @@ const CONFIG = {
   // Timecodes within the FULL reel, in seconds.
   // The free pose must be listed first and must match pose-free.mp4.
   poses: [
-    {label:'Hello',    start: 0.0, end: 4.0, locked:false},
-    {label:'Lounging', start: 4.0, end: 8.0, locked:true },
-    {label:'Casting',  start: 8.0, end:12.0, locked:true },
-    {label:'Goodbye',  start:12.0, end:16.0, locked:true }
+    {label:'Wave',     start: 0.0, end: 4.0, locked:false},
+    {label:'Curled Up',start: 4.0, end: 8.0, locked:true },
+    {label:'Spellcast',start: 8.0, end:12.0, locked:true },
+    {label:'Blow a Kiss',start:12.0, end:16.0, locked:true }
   ],
 
   // Painted room panels
@@ -223,6 +231,27 @@ const CONFIG = {
     period:   3600       // ms per breath
   },
 
+  // Magical atmosphere — floating motes + soft flickering light blooms.
+  // Everything here fades in as the portal opens and respects reduced-motion.
+  // Turn a piece off with enabled:false (motes) or an empty lights list.
+  atmosphere: {
+    motes: {
+      enabled: true,
+      count:   40,
+      color:   0xBFE6FF,   // pale arcane blue
+      size:    0.014,      // dot size, world units
+      drift:   0.02,       // how far each mote wanders from home
+      speed:   0.5,        // drift speed
+      twinkle: 0.6         // 0..1 depth of the brightness flicker
+    },
+    // One soft bloom over each candle / crystal cluster. x,y in room-width
+    // units from centre; depth 0 = back wall … 1 = portal. rate = flickers/sec.
+    lights: [
+      { x: 0.26, y: 0.02, depth:0.30, r:0.12, color:0x9FD8FF, strength:0.50, flicker:0.5, rate:7 }, // candelabra, right
+      { x:-0.24, y:-0.02, depth:0.14, r:0.10, color:0x7CF5D0, strength:0.42, flicker:0.4, rate:5 }  // crystals, left
+    ]
+  },
+
   // Chroma key. Set enabled:false if your footage already has a clean background.
   key: {
     enabled:    true,
@@ -232,11 +261,11 @@ const CONFIG = {
     spill:      0.12       // raise to kill green fringing on hair
   },
 
+  // Two buttons. 'Socials' opens a URL (your linktree / main handle); 'Unblurs'
+  // triggers the unlock flow (pay or follow, per `mode`) — no URL needed.
   links: [
-    {label:'itch.io',   url:'https://YOURNAME.itch.io'},
-    {label:'Instagram', url:'https://instagram.com/YOURHANDLE'},
-    {label:'Bluesky',   url:'https://bsky.app/profile/YOURHANDLE'},
-    {label:'YouTube',   url:'https://youtube.com/@YOURHANDLE'}
+    {label:'Socials',  url:'https://instagram.com/YOURHANDLE'},
+    {label:'Unblurs',  action:'unlock'}
   ]
 };
 
@@ -559,6 +588,88 @@ for (let i = 0; i < GLOW.layers; i++){
   layers.push({mat, base: mat.opacity});
 }
 
+/* ── magical atmosphere: floating motes + soft light blooms ─────────────
+   Cheap additive sprites living inside the room, stencil-clipped to the
+   keyhole and parallaxing with everything else. updateAtmosphere() is driven
+   by the render loop; `e` (portal-open 0..1) fades it in on lock. */
+const AT = CONFIG.atmosphere || {};
+const layerZ = d => -DEPTH * (0.99 - d * 0.85);
+
+function softDot(){
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d').createRadialGradient(32,32,0,32,32,32);
+  g.addColorStop(0,   'rgba(255,255,255,1)');
+  g.addColorStop(0.35,'rgba(255,255,255,0.55)');
+  g.addColorStop(1,   'rgba(255,255,255,0)');
+  const x = c.getContext('2d'); x.fillStyle = g; x.fillRect(0,0,64,64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const dotTex = softDot();
+
+let moteState = null;
+if (AT.motes && AT.motes.enabled){
+  const M = AT.motes, n = Math.max(0, M.count|0);
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(n*3), col = new Float32Array(n*3);
+  const c = new THREE.Color(M.color), base = [];
+  for (let i=0;i<n;i++){
+    const bx = (Math.random()*2-1)*0.30;
+    const by = CY + (Math.random()*2-1)*0.28;
+    const bz = -DEPTH*(0.08 + Math.random()*0.84);
+    base.push({bx,by,bz, px:Math.random()*6.28, py:Math.random()*6.28,
+               pz:Math.random()*6.28, tw:Math.random()*6.28, sp:0.6+Math.random()*0.8});
+    pos[i*3]=bx; pos[i*3+1]=by; pos[i*3+2]=bz;
+    col[i*3]=c.r; col[i*3+1]=c.g; col[i*3+2]=c.b;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(col,3));
+  const mat = insidePortal(new THREE.PointsMaterial({
+    size:M.size, map:dotTex, vertexColors:true, transparent:true,
+    blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true, toneMapped:false
+  }));
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false; pts.renderOrder = 3.6;
+  room.add(pts);
+  moteState = {M, geo, base, c, pos, col};
+}
+
+const bloomLights = (AT.lights || []).map(L=>{
+  const mat = insidePortal(new THREE.MeshBasicMaterial({
+    map:dotTex, color:new THREE.Color(L.color), transparent:true, opacity:0,
+    blending:THREE.AdditiveBlending, depthWrite:false, toneMapped:false
+  }));
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(L.r*2, L.r*2), mat);
+  m.position.set(L.x, CY + (L.y||0), layerZ(L.depth ?? 0.3));
+  m.renderOrder = 3.4;
+  room.add(m);
+  return {L, mat, base:L.strength ?? 0.5, phase:Math.random()*6.28};
+});
+
+function updateAtmosphere(now, e){
+  const t = now / 1000;
+  if (moteState){
+    const {M, geo, base, c, pos, col} = moteState;
+    for (let i=0;i<base.length;i++){
+      const b = base[i];
+      if (!reduced){
+        pos[i*3]   = b.bx + Math.sin(t*M.speed*b.sp        + b.px)*M.drift;
+        pos[i*3+1] = b.by + Math.cos(t*M.speed*b.sp*0.8     + b.py)*M.drift;
+        pos[i*3+2] = b.bz + Math.sin(t*M.speed*b.sp*0.6     + b.pz)*M.drift*0.6;
+      }
+      const flick = reduced ? 1 : 1 - M.twinkle*0.5*(1+Math.sin(t*2.2*b.sp + b.tw));
+      const k = Math.max(0, flick) * e;
+      col[i*3]=c.r*k; col[i*3+1]=c.g*k; col[i*3+2]=c.b*k;
+    }
+    geo.attributes.position.needsUpdate = true;
+    geo.attributes.color.needsUpdate = true;
+  }
+  for (const g of bloomLights){
+    const f = reduced ? 1 : 1 - g.L.flicker*0.5*(1+Math.sin(t*(g.L.rate||6) + g.phase));
+    g.mat.opacity = g.base * Math.max(0.1, f) * e;
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════
    POSE PLAYBACK
    Locked   → pose-free.mp4 loops end to end.
@@ -621,10 +732,18 @@ if (IMAGE_MODE){ posesEl.style.display='none'; }
 
 CONFIG.links.forEach(l=>{
   const a = document.createElement('a');
-  a.href = l.url; a.target = '_blank'; a.rel = 'noopener';
   a.textContent = l.label;
+  if (l.action === 'unlock'){
+    a.href = '#'; a.dataset.action = 'unlock';
+    a.addEventListener('click', e=>{ e.preventDefault(); triggerUnlock(); });
+  }else{
+    a.href = l.url; a.target = '_blank'; a.rel = 'noopener';
+  }
   linksEl.appendChild(a);
 });
+// If an 'Unblurs' link handles unlocking, retire the standalone keyhole button
+// so there's a single, clear call to action.
+if (CONFIG.links.some(l=>l.action === 'unlock')) unlockEl.style.display = 'none';
 
 if (CONFIG.mode === 'follow'){
   unlockEl.querySelector('.label').textContent = 'Follow to open';
@@ -702,7 +821,7 @@ async function redeem(sessionId){
   }
 }
 
-unlockEl.addEventListener('click', ()=>{
+function triggerUnlock(){
   if (unlocked) return;
   if (CONFIG.mode === 'follow'){
     window.open(CONFIG.followUrl, '_blank', 'noopener');
@@ -712,7 +831,8 @@ unlockEl.addEventListener('click', ()=>{
     const back = encodeURIComponent(location.origin + location.pathname);
     location.href = `${CONFIG.paymentUrl}?success_url=${back}`;
   }
-});
+}
+unlockEl.addEventListener('click', triggerUnlock);
 
 const params = new URLSearchParams(location.search);
 if (params.get('session_id')){
@@ -779,9 +899,10 @@ function fail(err){
     renderer.setAnimationLoop(()=>{
       const now = performance.now();
 
+      let e = 0;
       if (found && t0 !== null){
         const k = reduced ? 1 : Math.min(1, (now - t0) / 700);
-        const e = 1 - Math.pow(1 - k, 3);
+        e = 1 - Math.pow(1 - k, 3);
         // the printed keyhole is small; the portal blooms past it on lock
         const grow = 1 + (A.openTo - 1) * e;
         mask.scale.setScalar(grow);
@@ -800,6 +921,8 @@ function fail(err){
       poseMat.uniforms.fade.value = now < fadeUntil
         ? Math.abs((now - fadeUntil + 260) / 130 - 1)
         : 1.0;
+
+      updateAtmosphere(now, e);
 
       renderer.render(scene, camera);
     });
