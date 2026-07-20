@@ -187,12 +187,10 @@ const CONFIG = {
   },
 
   // TEST MODE — use a still until the reel is shot.
-  // 'video' = pose reel, 'image' = single still filling the back wall.
-  // Uses the blurred still, which is committed — so the test works hosted too.
-  // key:'green' keys out a flat green background so a cut-out reads as a real
-  // figure standing in the room instead of a flat rectangle. false = show the
-  // still as-is (current portrait-blurred has no green screen, so leave false
-  // until you drop in a green-background cut-out of Zoe).
+  // 'video' = pose reel, 'image' = single still of Zoe standing in the room.
+  // zoe-cutout.png is a transparent cut-out (from zoe.jpg, colour-graded to the
+  // room). key:false uses the PNG's own alpha. Switch to key:'green' only if
+  // you regenerate on a chroma-green background.
   media: { type:'image', image:'./art/zoe-cutout.png', key:false },
 
   // ── Cut-out prop layers → the parallax depth ─────────────────────────
@@ -226,6 +224,10 @@ const CONFIG = {
   // Measured against card-front.png as it stands (1.49:1). These change when
   // you recompose to 1.75:1 — re-measure then, or the portal will sit off-centre.
   aperture: { r:0.1102, cy:0.1378, topHalf:0.0621, botHalf:0.1018, bottomY:-0.2332, openTo:1.35 },
+
+  // Where the peep sits inside the 3D room, as a fraction of room height from
+  // the floor (0.5 = mid-door, higher = floor drops under the hole / higher POV).
+  keyholeInRoom: 0.68,
 
   // Soft light spilling out around the keyhole.
   glow: {
@@ -353,7 +355,10 @@ function wall(w,h,pos,rot,mat){
   m.position.set(...pos); m.rotation.set(...rot); m.renderOrder = 2;
   room.add(m); return m;
 }
-const CY = KEY.cy - 0.05;
+// Vertical placement of the room under the fixed keyhole mask. Driven by
+// CONFIG.keyholeInRoom (see CONFIG). Higher value → floor lower under the peep.
+const KEYHOLE_IN_ROOM = CONFIG.keyholeInRoom ?? 0.68;
+const CY = KEY.cy - ROOM_H * (KEYHOLE_IN_ROOM - 0.5);
 const G  = CONFIG.grade;
 const backWall = wall(ROOM_W, ROOM_H, [0, CY, -DEPTH], [0,0,0],
                       panel(CONFIG.art.back, G.back, false));
@@ -366,7 +371,8 @@ wall(DEPTH, ROOM_H, [ ROOM_W/2, CY, -DEPTH/2], [0,-Math.PI/2, 0],
 // grazing angle projects its front edge UP into the aperture, leaving the stem
 // empty; the extra length fills it. It's stencil-clipped to the keyhole, so the
 // overhang only ever shows inside the hole. Bump FLOOR_FRONT if a gap remains.
-const FLOOR_FRONT = 0.34;
+// Slightly longer with the higher peep so the stem still fills with floor.
+const FLOOR_FRONT = 0.42;
 const floorLen    = DEPTH + FLOOR_FRONT;
 wall(ROOM_W, floorLen, [0, CY-ROOM_H/2, (-DEPTH + FLOOR_FRONT)/2], [-Math.PI/2,0,0],
      panel(CONFIG.art.floor, G.floor, false));
@@ -382,18 +388,18 @@ const video = document.getElementById('poseVideo');
 let sourceTex;
 
 if (IMAGE_MODE){
-  // Standing in for the reel. The still already contains its own room, so it
-  // takes over the back wall rather than floating in front of it.
+  // Zoe cut-out in front of the painted room (not a full-frame room still).
+  // Aspect is corrected once the texture loads so she keeps her true proportions
+  // (see fitZoeAspect below — after poseMesh exists).
   sourceTex = loader.load(CONFIG.media.image, t=>{
     t.colorSpace = THREE.SRGBColorSpace;
     t.minFilter  = THREE.LinearFilter;
     t.generateMipmaps = false;
+    fitZoeAspect(t);
   });
-  // Keep the painted back wall as a solid backdrop. The Zoe still is narrower
-  // than the room (0.415 vs 0.62 wide), so hiding the wall left see-through
-  // strips on either side and in the back corners of the floor. Showing the
-  // wall closes the box, and gives Zoe something to stand in front of once she
-  // moves off the back wall.
+  // Keep the painted back wall as a solid backdrop. The Zoe cut-out is narrower
+  // than the room, so hiding the wall left see-through strips on either side
+  // and in the back corners of the floor. Showing the wall closes the box.
   backWall.visible = true;
 }else{
   video.crossOrigin = 'anonymous';
@@ -463,20 +469,31 @@ const poseMat = insidePortal(new THREE.ShaderMaterial({
 //   0.0 = flat against the back wall (old behaviour), 1.0 = up at the portal.
 // ZOE_SIZE: her scale. 1.0 = full room height; drop it if she looms too large
 //   once she's closer to the camera.
-const ZOE_FORWARD = 0.45;
-const ZOE_SIZE    = 0.90;
+// ZOE_Y: vertical offset from room centre. Negative lowers her toward the floor
+//   (good for a crouching / seated cut-out whose feet sit at the bottom edge).
+const ZOE_FORWARD = 0.42;
+const ZOE_SIZE    = 0.82;
+const ZOE_Y       = -0.04;
 const zoeZ = -DEPTH * (0.99 - ZOE_FORWARD * 0.85);   // 0.99 back → 0.14 at portal
 
 const poseMesh = IMAGE_MODE
-  ? new THREE.Mesh(new THREE.PlaneGeometry(ROOM_H * 0.67 * ZOE_SIZE, ROOM_H * ZOE_SIZE), poseMat)
+  ? new THREE.Mesh(new THREE.PlaneGeometry(ROOM_H * 0.61 * ZOE_SIZE, ROOM_H * ZOE_SIZE), poseMat)
   : new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.45), poseMat);
-poseMesh.position.set(0, CY + (IMAGE_MODE ? 0 : 0.005),
+poseMesh.position.set(0, CY + (IMAGE_MODE ? ZOE_Y : 0.005),
                       IMAGE_MODE ? zoeZ : -DEPTH * 0.62);
 // Draw order rises with how far forward a thing sits, so nearer things paint
 // over farther ones (everything here is depthWrite:false). Zoe uses her own
 // forward amount; props below use theirs.
 poseMesh.renderOrder = 3 + (IMAGE_MODE ? ZOE_FORWARD : 0.62);
 room.add(poseMesh);
+
+function fitZoeAspect(t){
+  if (!IMAGE_MODE || !poseMesh || !t?.image?.width || !t.image.height) return;
+  const ar = t.image.width / t.image.height;
+  const h  = ROOM_H * ZOE_SIZE;
+  poseMesh.geometry.dispose();
+  poseMesh.geometry = new THREE.PlaneGeometry(h * ar, h);
+}
 
 // ── Cut-out prop layers → parallax depth ────────────────────────────────
 // Builds one keyhole-clipped plane per CONFIG.layers entry. key:'green'

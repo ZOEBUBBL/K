@@ -244,3 +244,53 @@ Filenames must match `CONFIG.layers`: `couch.png`, `candelabra.png`, `frames.png
 (0 = back wall, 1 = at the keyhole), `scale`. The couch is already set to the right
 side at mid-depth. Tune the numbers on your phone; a file that isn't there yet just
 stays invisible, so add them one at a time.
+
+---
+
+## 9 — Glow overlays  ·  the "wow" pass  ·  `key:'add'`
+
+These are the light itself — moonbeams, candle bloom, crystal shimmer — layered
+*on top of* the room and added to it. The engine blends them additively, so the
+rule flips from the cut-outs:
+
+**Generate every overlay on a FLAT PURE-BLACK background.** Under additive
+blending, black (`#000000`) adds nothing and vanishes — only the light shows. No
+green here, no keying needed. The brighter and more saturated the light, the
+stronger it reads; keep everything that should be invisible pure black.
+
+```
+GLOW RULES  (append after STYLE)
+Pure flat black background, #000000, no detail, no texture, no objects — only the
+light effect itself floating on black. The effect is bright, luminous and soft,
+glowing against the black. No hard edges, no solid shapes, no frame, no vignette
+box. Nothing but the glow. Painterly soft light, not a photo of a lamp.
+```
+
+Filenames match `CONFIG.layers`: `fx-moonbeam.png`, `fx-candleglow.png`,
+`fx-crystal.png`. They're already wired (invisible until the file lands). Tune
+`x`/`y`/`depth`/`scale` on your phone to sit them over the right spot; raise the
+effect's brightness in Grok (not opacity in code) if you want it stronger.
+
+### 9a — Moonbeam shaft  ·  `fx-moonbeam.png`  ·  tall  (over the window, right)
+> A soft diagonal shaft of pale arcane-cyan moonlight, like light falling through a
+> gap in curtains, with faint drifting dust catching in the beam. Luminous and hazy,
+> feathered soft edges fading to nothing. GLOW RULES. STYLE
+
+### 9b — Candle bloom  ·  `fx-candleglow.png`  ·  square  (over the candelabra)
+> A warm halo of candlelight — a soft golden-amber glow with a gentle flame-coloured
+> core and a few tiny floating embers, radiating outward and fading to black. GLOW
+> RULES. STYLE
+
+### 9c — Crystal shimmer  ·  `fx-crystal.png`  ·  square  (over the shelf crystals)
+> A cluster of cool arcane-cyan and violet magical light, a soft radiant shimmer with
+> a few thin sparkle glints, as if crystals were glowing. Luminous, ethereal, fading
+> to black. GLOW RULES. STYLE
+
+### More you could add later
+Same recipe, new prompt + a `key:'add'` layer entry:
+- **Fairy-light string glow** over the ceiling lights.
+- **Floating rune sigils** — faint glowing symbols drifting in the air.
+- **Fireplace / hearth flicker** if you add one to the set.
+
+Since these are additive, you can stack several cheaply — they only ever *add*
+light, never block anything behind them.
