@@ -211,7 +211,14 @@ const CONFIG = {
     { src:'./art/couch.png',      x: 0.17, y:-0.15, depth:0.40, scale:0.34, key:false },
     { src:'./art/candelabra.png', x: 0.27, y:-0.05, depth:0.30, scale:0.40, key:false },
     { src:'./art/frames.png',     x:-0.24, y: 0.12, depth:0.06, scale:0.34, key:false },
-    { src:'./art/bookshelf.png',  x:-0.27, y:-0.04, depth:0.14, scale:0.60, key:false }
+    { src:'./art/bookshelf.png',  x:-0.27, y:-0.04, depth:0.14, scale:0.60, key:false },
+
+    // ── Glow overlays (key:'add') — generate on PURE BLACK; black adds
+    // nothing under additive blending, so only the light shows. These stay
+    // invisible until the file exists. See docs/grok-prompts.md section 9.
+    { src:'./art/fx-moonbeam.png',  x: 0.30, y: 0.05, depth:0.20, scale:0.85, key:'add' },
+    { src:'./art/fx-candleglow.png',x: 0.27, y:-0.02, depth:0.31, scale:0.30, key:'add' },
+    { src:'./art/fx-crystal.png',   x:-0.24, y:-0.04, depth:0.15, scale:0.30, key:'add' }
   ],
 
   // The printed aperture, measured off card-front.png, in card-width units.
@@ -476,6 +483,12 @@ room.add(poseMesh);
 // chroma-keys a green background; otherwise a transparent PNG's own alpha is
 // used. Missing files stay invisible so art can land one piece at a time.
 function cutoutMat(keyMode){
+  if (keyMode === 'add'){                 // black-background glow overlay:
+    return insidePortal(new THREE.MeshBasicMaterial({   // black adds nothing
+      map:null, transparent:true, blending:THREE.AdditiveBlending,
+      depthWrite:false, toneMapped:false
+    }));
+  }
   if (keyMode !== 'green'){
     return insidePortal(new THREE.MeshBasicMaterial({
       transparent:true, alphaTest:0.03, depthWrite:false, toneMapped:false
